@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="Sky Slam — a tiny offline arcade game. Dash, slam, chain a combo, stay on the island." />
+  <title>Sky Slam</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="file-warn" hidden>
+    Sky Slam needs a tiny local server. On Windows, double-click start.bat. On Mac or Linux, run ./start.sh.
+  </div>
+  <canvas id="c" aria-label="Sky Slam game view"></canvas>
+  <div id="vignette"></div>
+  <div id="flash"></div>
+  <div id="callout" aria-hidden="true"></div>
+  <div id="banner" hidden>
+    <div id="banner-title"></div>
+    <div id="banner-sub"></div>
+  </div>
+
+  <div id="hud" hidden>
+    <div class="lives" id="lives" aria-label="Lives"></div>
+    <div class="scoreblock">
+      <div id="score">0</div>
+      <div id="best">BEST —</div>
+      <div id="combo-wrap" hidden>
+        <div id="combo">x1</div>
+        <div id="combo-bar" aria-hidden="true"><i id="combo-fill"></i></div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div id="level">LV 1</div>
+      <button id="mute" class="icon-btn" type="button">SND</button>
+      <button id="btn-pause" class="icon-btn" type="button" aria-label="Pause">II</button>
+    </div>
+    <div id="hints">WASD or arrows to move</div>
+    <div id="touch">
+      <div id="joy" aria-label="Move stick"><div id="knob"></div></div>
+      <div id="actions">
+        <button id="btn-slam" class="act" type="button">SLAM</button>
+        <button id="btn-dash" class="act dash" type="button">DASH</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="title" class="screen">
+    <div class="card title-card">
+      <h1 class="logo">SKY<br />SLAM</h1>
+      <p class="tag">Dash through crates. Chain a combo. Stay on the island.</p>
+      <div class="best-chip" id="title-best">NO RECORD YET</div>
+      <button id="play" class="play" type="button">SLAM IN</button>
+      <ul class="controls">
+        <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</li>
+        <li><kbd>Space</kbd> Dash</li>
+        <li><kbd>F</kbd> Slam</li>
+        <li><kbd>Esc</kbd> Pause</li>
+        <li><kbd>M</kbd> Mute</li>
+        <li>Click to dash. Right-click to slam. Touch uses the stick.</li>
+      </ul>
+      <button id="title-mute" class="icon-btn" type="button" data-noclick style="margin-top:12px">SND</button>
+      <p class="fine">Local. Offline. One more run.</p>
+    </div>
+  </section>
+
+  <section id="pause" class="screen dim" hidden>
+    <div class="card center">
+      <p class="over-kicker">HOLD UP</p>
+      <h2 class="logo">PAUSED</h2>
+      <ul class="controls" style="text-align:left">
+        <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</li>
+        <li><kbd>Space</kbd> Dash</li>
+        <li><kbd>F</kbd> Slam</li>
+        <li><kbd>Esc</kbd> Resume</li>
+      </ul>
+      <div class="row">
+        <button id="resume" class="play" type="button">RESUME</button>
+      </div>
+      <div class="row">
+        <button id="pause-restart" class="ghost" type="button">RESTART</button>
+        <button id="pause-menu" class="ghost" type="button">MENU</button>
+        <button id="pause-mute" class="ghost" type="button" data-noclick>SND</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="over" class="screen dim" hidden>
+    <div class="card center">
+      <p class="over-kicker">WIPED OUT</p>
+      <h2 class="logo">OOF</h2>
+      <p class="over-reason" id="over-reason">The island wins.</p>
+      <div class="over-score" id="over-score">0</div>
+      <div id="over-new" class="stamp" hidden>NEW BEST</div>
+      <div class="best-chip" id="over-best">BEST —</div>
+      <div class="row">
+        <button id="again" class="play" type="button">AGAIN</button>
+      </div>
+      <div class="row">
+        <button id="over-menu" class="ghost" type="button">MENU</button>
+      </div>
+      <p class="menu-note">R, Space, or Enter restarts instantly.</p>
+    </div>
+  </section>
+
+  <script>
+    document.addEventListener("touchmove", function (e) {
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    ["gesturestart", "gesturechange"].forEach(function (type) {
+      document.addEventListener(type, function (e) { e.preventDefault(); });
+    });
+    if (location.protocol === "file:") {
+      var warn = document.getElementById("file-warn");
+      warn.hidden = false;
+      warn.textContent = "Sky Slam needs a tiny local server. On Windows, double-click start.bat. On Mac or Linux, run ./start.sh. Opening index.html directly will not start the game.";
+    }
+    setTimeout(function () {
+      if (location.protocol === "file:") return;
+      if (!window.__skyReady) {
+        var note = document.getElementById("file-warn");
+        note.hidden = false;
+        note.textContent = "Sky Slam didn't start. If the page is blank, Python may be labeling .js files incorrectly. In this folder run: py serve.py 8477   then open http://127.0.0.1:8477/";
+      }
+    }, 2500);
+  </script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
