@@ -316,10 +316,20 @@ function boot() {
     [-34, 5, 8, 2.3],
     [6, 13, -30, 3.1],
   ];
+  // Puff layout is a unit sphere stretched to (1.35, 0.72, 1). The longest axis
+  // plus the puff offset is the local bounding radius, before the group scale.
+  let cloudLocalRadius = 0;
+  for (let i = 0; i < 5; i++) {
+    cloudLocalRadius = Math.max(
+      cloudLocalRadius,
+      Math.hypot((i - 2) * 0.75, Math.sin(i) * 0.18, (i % 2) * 0.28) + 1.35
+    );
+  }
   for (const [x, y, z, s] of cloudSpots) {
     const group = new THREE.Group();
+    const mat = cloudMat.clone();
     for (let i = 0; i < 5; i++) {
-      const puff = new THREE.Mesh(cloudGeo, cloudMat);
+      const puff = new THREE.Mesh(cloudGeo, mat);
       puff.position.set((i - 2) * 0.75, Math.sin(i) * 0.18, (i % 2) * 0.28);
       puff.scale.set(1.35, 0.72, 1);
       group.add(puff);
@@ -328,6 +338,8 @@ function boot() {
     group.scale.setScalar(s);
     group.userData.baseX = x;
     group.userData.speed = 0.6 + s * 0.15;
+    group.userData.radius = cloudLocalRadius * s;
+    group.userData.mat = mat;
     scene.add(group);
     cloudGroups.push(group);
   }
@@ -1658,6 +1670,80 @@ function boot() {
     document.body.classList.toggle("low", mode === "play" && lives === 1);
   }
 
+  // Island sphere the camera must be able to see. A cloud whose disk overlaps
+  // this sphere and sits closer than it is covering the play area.
+  const CLOUD_PLAY_R = R + 1.8;
+
+  function raySphereT(ox, oy, oz, dx, dy, dz, cx, cy, cz, rad) {
+    const lx = ox - cx;
+    const ly = oy - cy;
+    const lz = oz - cz;
+    const b = lx * dx + ly * dy + lz * dz;
+    const c = lx * lx + ly * ly + lz * lz - rad * rad;
+    const disc = b * b - c;
+    if (disc < 0) return null;
+    const s = Math.sqrt(disc);
+    const t0 = -b - s;
+    if (t0 > 0.05) return t0;
+    const t1 = -b + s;
+    if (t1 > 0.05) return t1;
+    return null;
+  }
+
+  function cloudCoversPlay(cx, cy, cz, radius) {
+    const cam = camera.position;
+    const dx = cx - cam.x;
+    const dy = cy - cam.y;
+    const dz = cz - cam.z;
+    const cloudDist = Math.hypot(dx, dy, dz);
+    if (cloudDist <= radius + 0.75) return true;
+    const px = -cam.x;
+    const py = 0.45 - cam.y;
+    const pz = -cam.z;
+    const playDist = Math.hypot(px, py, pz);
+    if (cloudDist < 1e-4 || playDist < 1e-4) return true;
+    const cosang = clamp((dx * px + dy * py + dz * pz) / (cloudDist * playDist), -1, 1);
+    const ang = Math.acos(cosang);
+    const cloudAng = Math.asin(Math.min(1, radius / cloudDist));
+    const playAng = Math.asin(Math.min(1, CLOUD_PLAY_R / playDist));
+    if (ang >= cloudAng + playAng - 1e-5) return false;
+    const cloudNear = cloudDist - radius;
+    const inv = 1 / cloudDist;
+    const tHit = raySphereT(cam.x, cam.y, cam.z, dx * inv, dy * inv, dz * inv, 0, 0.45, 0, CLOUD_PLAY_R);
+    if (tHit == null) {
+      const sil = Math.sqrt(Math.max(0, playDist * playDist - CLOUD_PLAY_R * CLOUD_PLAY_R));
+      return cloudNear < sil;
+    }
+    return cloudNear < tHit;
+  }
+
+  // 1 when the cloud is clear of the play view, 0 when it would cover it.
+  // The band in between fades the cloud out before it reaches the island.
+  function cloudVisibility(cx, cy, cz, radius) {
+    const hard = 1.15;
+    if (cloudCoversPlay(cx, cy, cz, radius + hard)) return 0;
+    const pad = 3.2;
+    if (!cloudCoversPlay(cx, cy, cz, radius + pad)) return 1;
+    let lo = hard;
+    let hi = pad;
+    for (let i = 0; i < 6; i++) {
+      const mid = (lo + hi) * 0.5;
+      if (cloudCoversPlay(cx, cy, cz, radius + mid)) hi = mid;
+      else lo = mid;
+    }
+    return (lo - hard) / (pad - hard);
+  }
+
+  function guardClouds() {
+    for (const group of cloudGroups) {
+      const fade = cloudVisibility(group.position.x, group.position.y, group.position.z, group.userData.radius);
+      const mat = group.userData.mat;
+      mat.opacity = 0.92 * fade;
+      mat.depthWrite = fade > 0.9;
+      group.visible = fade > 0.04;
+    }
+  }
+
   function driftScenery() {
     for (const group of cloudGroups) {
       const span = 120;
@@ -1665,6 +1751,7 @@ function boot() {
       group.position.x = group.userData.baseX + travel;
       if (group.position.x > 60) group.position.x -= span;
     }
+    guardClouds();
     for (let i = 0; i < islets.length; i++) {
       islets[i].position.y = -1.2 + Math.sin(realTime * 0.6 + i) * 0.25;
     }
@@ -1969,9 +2056,9 @@ function boot() {
       fx.update(sim);
     }
 
-    driftScenery();
     placeCamera(realDt, snapCam);
     snapCam = false;
+    driftScenery();
     paintUi(realDt);
     draw();
   }
